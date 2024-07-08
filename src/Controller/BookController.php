@@ -3,17 +3,18 @@
 namespace App\Controller;
 
 use App\Entity\Book;
-use App\Repository\AuthorRepository;
 use App\Repository\BookRepository;
+use App\Repository\AuthorRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\Serializer\SerializerInterface;
+use Symfony\Component\Validator\Validator\ValidatorInterface;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
-use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\Serializer\Normalizer\AbstractNormalizer;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 
 class BookController extends AbstractController
 {
@@ -53,10 +54,19 @@ class BookController extends AbstractController
     }
     
     #[Route('/api/books', name:"createBook", methods: ['POST'])]
-    public function createBook(Request $request, SerializerInterface $serializer, EntityManagerInterface $em, UrlGeneratorInterface $urlGenerator, AuthorRepository $authorRepository): JsonResponse 
+    public function createBook(Request $request, SerializerInterface $serializer, EntityManagerInterface $em, UrlGeneratorInterface $urlGenerator, AuthorRepository $authorRepository, ValidatorInterface $validator): JsonResponse 
     {
 
         $book = $serializer->deserialize($request->getContent(), Book::class, 'json');
+
+        // On vérifie les erreurs si les données respectent les contraintes d'intégrité
+        $errors = $validator->validate($book);
+
+        if ($errors->count() > 0) {
+            return new JsonResponse($serializer->serialize($errors, 'json'), JsonResponse::HTTP_BAD_REQUEST, [], true);
+            //throw new HttpException(JsonResponse::HTTP_BAD_REQUEST, "La requête est invalide");
+        }
+
         $em->persist($book);
         $em->flush();
 
@@ -76,18 +86,18 @@ class BookController extends AbstractController
 
    public function updateBook(Request $request, SerializerInterface $serializer, Book $currentBook, EntityManagerInterface $em, AuthorRepository $authorRepository): JsonResponse 
    {
-    #currentBook is automatically known by symfony (via ID)
-       $updatedBook = $serializer->deserialize($request->getContent(), 
-               Book::class, 
-               'json', 
-               [AbstractNormalizer::OBJECT_TO_POPULATE => $currentBook]);
-       $content = $request->toArray();
-       $idAuthor = $content['idAuthor'] ?? -1;
-       $updatedBook->setAuthor($authorRepository->find($idAuthor));
-       
-       $em->persist($updatedBook);
-       $em->flush();
-       return new JsonResponse(null, JsonResponse::HTTP_NO_CONTENT);
+        #currentBook is automatically known by symfony (via {id})
+        $updatedBook = $serializer->deserialize($request->getContent(), 
+                Book::class, 
+                'json', 
+                [AbstractNormalizer::OBJECT_TO_POPULATE => $currentBook]);
+        $content = $request->toArray();
+        $idAuthor = $content['idAuthor'] ?? -1;
+        $updatedBook->setAuthor($authorRepository->find($idAuthor));
+        
+        $em->persist($updatedBook);
+        $em->flush();
+        return new JsonResponse(null, JsonResponse::HTTP_NO_CONTENT);
   }
 
 }
